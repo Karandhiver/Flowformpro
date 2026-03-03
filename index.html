@@ -107,6 +107,9 @@
     .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; background: var(--bg-alt); padding: 16px; border-radius: 16px; border: 1px solid var(--border-color); align-items: center; width: 100%; }
     .filter-search { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; background: var(--bg-main); padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border-color); }
     .filter-search input { border: none; background: transparent; outline: none; width: 100%; font-size: 14px; font-family: inherit; color: var(--text-main); }
+    .date-range { display: flex; align-items: center; gap: 8px; background: var(--bg-main); padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border-color); font-size: 13px;}
+    .date-range input[type="date"] { border: none; background: transparent; font-family: inherit; font-size: 13px; color: var(--text-main); outline: none; cursor: pointer; }
+    .filter-select { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-main); font-size: 13px; font-weight: 600; color: var(--text-main); outline: none; cursor: pointer; font-family: inherit;}
     
     .data-card { background: var(--bg-alt); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); margin-bottom: 16px; width: 100%; overflow: hidden;}
     .data-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px dashed var(--border-color); padding-bottom: 16px; flex-wrap: wrap; gap: 12px;}
@@ -147,7 +150,10 @@
     .chart-bar { width: 100%; background: var(--primary-light); border-radius: 6px 6px 0 0; position: relative; transition: 0.3s; cursor: pointer; }
     .chart-bar:hover { background: var(--primary); }
 
-    /* Mobile */
+    /* Landing Page */
+    .landing-nav { display: flex; justify-content: space-between; align-items: center; padding: 24px 40px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+    /* === STRICT MOBILE RULES === */
     .mobile-nav { display: none; }
     @media (max-width: 768px) {
       .sidebar { display: none; }
@@ -164,6 +170,7 @@
       .tabs { padding: 0 16px; margin-left: -16px; margin-right: -16px; width: 100vw; max-width: 100vw; }
       .tabs .tab:first-child { margin-left: 16px; }
       .tabs .tab:last-child { margin-right: 16px; }
+      .landing-nav { padding: 16px; }
       .modal-footer { flex-direction: column; }
       .modal-footer .btn { width: 100%; margin-left: 0; }
     }
@@ -339,6 +346,16 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <input type="text" id="search-input" placeholder="Search payloads..." oninput="renderSubmissions()">
               </div>
+              <div class="date-range">
+                <span style="color:var(--text-muted); font-weight:600; font-size:12px;">Date:</span>
+                <input type="date" id="filter-start-date" onchange="renderSubmissions()" />
+                <span style="color:var(--text-muted)">to</span>
+                <input type="date" id="filter-end-date" onchange="renderSubmissions()" />
+              </div>
+              <select class="filter-select" id="filter-type" onchange="renderSubmissions()">
+                <option value="all">All Submissions</option>
+                <option value="media">Has Media Attached</option>
+              </select>
             </div>
             <div id="submissions-list">
               <!-- Rendered via JS -->
@@ -381,7 +398,7 @@
 
             <div class="bento-card">
               <h3 class="title-h2">2. Universal Integration Script</h3>
-              <p class="text-muted">Place this script in your HTML. It automatically captures text forms, converts file uploads to Base64 (saving them to your DB), and can trigger Web3Forms emails.</p>
+              <p class="text-muted">Place this script in your HTML. It automatically captures text forms, converts file uploads to Base64 (saving them to your DB), and can trigger Web3Forms emails dynamically.</p>
               <div class="code-box" style="margin-top: 16px; position:relative;">
                 <button onclick="copySdkCode()" style="position:absolute; top:12px; right:12px; background:var(--bg-main); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main);">Copy Script</button>
                 <div id="ui-sdk-code" style="white-space: pre-wrap;"></div>
@@ -491,7 +508,7 @@
 
   <!-- === JAVASCRIPT LOGIC === -->
   <script>
-    // --- FIREBASE CONFIG (Required for Native JS) ---
+    // --- FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyD7T3i70I-LMCOXlb-7fyjTBi1EAJED7lw",
       authDomain: "safarxin2026.firebaseapp.com",
@@ -540,7 +557,7 @@
       const btn = document.getElementById('btn-google-login');
       btn.innerHTML = "Authenticating...";
       auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => {
-        alert("Login Error: " + err.message);
+        alert("Login Error: Make sure your current URL is added to Firebase Authorized Domains.");
         btn.innerHTML = "Continue with Google";
       });
     }
@@ -557,7 +574,7 @@
           projectsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
           document.getElementById('stat-proj-count').textContent = projectsData.length;
           renderProjects();
-        }, err => console.error(err));
+        }, err => console.error("Rules Error:", err));
     }
 
     function listenToForms() {
@@ -569,13 +586,13 @@
           document.getElementById('stat-form-count').textContent = formsData.length;
           renderForms();
           
-          // If viewing a specific form, update its settings UI
           if(activeFormId) {
             const f = formsData.find(x => x.id === activeFormId);
             if(f) {
               document.getElementById('settings-email-toggle').checked = !!f.web3Key;
               document.getElementById('settings-web3-box').style.display = f.web3Key ? 'block' : 'none';
               document.getElementById('settings-web3-key').value = f.web3Key || '';
+              updateFormSDKUI(f); // Dynamically update the snippet and URL if settings change
             }
           }
         });
@@ -589,8 +606,7 @@
           submissionsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
           document.getElementById('stat-sub-count').textContent = submissionsData.length;
           
-          // Count media
-          const mediaCount = submissionsData.filter(s => JSON.stringify(s.data).includes('data:image') || JSON.stringify(s.data).includes('data:video')).length;
+          const mediaCount = submissionsData.filter(s => JSON.stringify(s.data).includes('data:image') || JSON.stringify(s.data).includes('data:video') || JSON.stringify(s.data).includes('data:audio')).length;
           document.getElementById('stat-media-count').textContent = mediaCount;
           
           renderSubmissions();
@@ -663,6 +679,7 @@
 
     function selectProject(pid, pname) {
       activeProjectId = pid;
+      activeFormId = null;
       document.getElementById('ui-proj-title').textContent = pname;
       openWorkspaceView('ws-project');
       listenToForms();
@@ -683,32 +700,117 @@
       `).join('');
     }
 
-    function selectForm(fid) {
-      activeFormId = fid;
-      const f = formsData.find(x => x.id === fid);
+    function updateFormSDKUI(f) {
       document.getElementById('ui-form-title').textContent = f.name;
       document.getElementById('ui-form-type-badge').textContent = f.type === 'form' ? 'Web Form' : 'Tracker';
       
-      // Build SDK Snippet
       const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/artifacts/${APP_ID}/users/${currentUser.uid}/projects/${activeProjectId}/forms/${activeFormId}/submissions`;
       document.getElementById('ui-api-url').value = url;
+
+      const web3Fetch = f.web3Key ? `\n        // Email Notification\n        await fetch('https://api.web3forms.com/submit', { \n          method: 'POST', \n          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, \n          body: JSON.stringify({ access_key: "${f.web3Key}", subject: "New FlowForm Submission", ...payload }) \n        });` : '';
+
+      const snippet = `<!-- Complete Integration Example -->
+<form id="my-flow-form">
+  <input type="email" name="email" placeholder="Your Email" required>
+  <textarea name="message" placeholder="Message" required></textarea>
+  <input type="file" name="attachment">
+  <button type="submit">Submit</button>
+</form>
+
+<!-- FlowForm Engine -->
+<script>
+  function bindFlowForm(formId) {
+    const form = document.getElementById(formId);
+    if(!form) return console.error('FlowForm: Form missing.');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type="submit"]');
+      const origText = btn ? btn.innerText : 'Submit';
+      if(btn) { btn.disabled = true; btn.innerText = "Sending..."; }
       
-      const snippet = `<!-- Universal Integration Code -->\n<script>\n  window.FlowForm = {\n    endpoint: "${url}",\n    submit: async function(payload) {\n      const fields = { createdAt: { integerValue: Date.now().toString() }, data: { mapValue: { fields: {} } } };\n      for (const [k, v] of Object.entries(payload)) fields.data.mapValue.fields[k] = { stringValue: String(v) };\n      await fetch(this.endpoint, { method: 'POST', body: JSON.stringify({ fields }) });\n      ${f.web3Key ? `await fetch('https://api.web3forms.com/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ access_key: "${f.web3Key}", ...payload }) });` : ''}\n    }\n  };\n<\/script>`;
-      
+      try {
+        let payload = {};
+        const formData = new FormData(form);
+        for (let [key, value] of formData.entries()) {
+          if (value instanceof File && value.size > 0) {
+            const reader = new FileReader();
+            payload[key] = await new Promise((res, rej) => { 
+              reader.onload = () => res(reader.result); 
+              reader.onerror = rej; 
+              reader.readAsDataURL(value); 
+            });
+          } else { payload[key] = value; }
+        }
+
+        const fields = { 
+          createdAt: { integerValue: Date.now().toString() }, 
+          userAgent: { stringValue: navigator.userAgent }, 
+          data: { mapValue: { fields: {} } } 
+        };
+        for (const [k, v] of Object.entries(payload)) {
+          fields.data.mapValue.fields[k] = { stringValue: String(v) };
+        }
+
+        // Save to Database
+        const dbRes = await fetch("${url}", { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ fields }) 
+        });
+        if(!dbRes.ok) throw new Error("DB Error");
+        ${web3Fetch}
+
+        if(btn) btn.innerText = "Success!";
+        form.reset();
+        setTimeout(() => { if(btn) { btn.disabled = false; btn.innerText = origText; } }, 3000);
+      } catch(err) {
+        console.error(err);
+        if(btn) { btn.innerText = "Error!"; setTimeout(() => { btn.disabled = false; btn.innerText = origText; }, 3000); }
+      }
+    });
+  }
+<`+`/script>
+
+<!-- Bind it to your form -->
+<script>
+  bindFlowForm('my-flow-form');
+<`+`/script>`;
+
       document.getElementById('ui-sdk-code').textContent = snippet;
-      
+    }
+
+    function selectForm(fid) {
+      activeFormId = fid;
+      const f = formsData.find(x => x.id === fid);
+      updateFormSDKUI(f);
       openWorkspaceView('ws-form');
       listenToSubmissions();
     }
 
     function renderSubmissions() {
       const container = document.getElementById('submissions-list');
-      const filter = document.getElementById('search-input').value.toLowerCase();
+      const searchFilter = document.getElementById('search-input').value.toLowerCase();
       
-      const filtered = submissionsData.filter(s => JSON.stringify(s.data).toLowerCase().includes(filter));
+      const startDateVal = document.getElementById('filter-start-date').value;
+      const endDateVal = document.getElementById('filter-end-date').value;
+      const typeVal = document.getElementById('filter-type').value;
+
+      const startDate = startDateVal ? new Date(startDateVal).getTime() : 0;
+      const endDate = endDateVal ? new Date(endDateVal).getTime() + 86399999 : Infinity; // end of day
+
+      const filtered = submissionsData.filter(s => {
+        const strData = JSON.stringify(s.data);
+        const matchesSearch = strData.toLowerCase().includes(searchFilter);
+        const matchesDate = s.createdAt >= startDate && s.createdAt <= endDate;
+        const hasMedia = strData.includes('data:image') || strData.includes('data:video') || strData.includes('data:audio');
+        const matchesType = typeVal === 'all' || (typeVal === 'media' && hasMedia);
+
+        return matchesSearch && matchesDate && matchesType;
+      });
       
       if (filtered.length === 0) {
-        container.innerHTML = '<div class="bento-card" style="text-align:center; padding:60px 20px;"><p class="text-muted">No records found.</p></div>';
+        container.innerHTML = '<div class="bento-card" style="text-align:center; padding:60px 20px;"><p class="text-muted">No records found matching your filters.</p></div>';
         return;
       }
 
