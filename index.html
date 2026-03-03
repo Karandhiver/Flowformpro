@@ -190,7 +190,7 @@
     <div style="text-align: center; padding: 60px 16px; max-width: 800px; margin: 0 auto; width: 100%;">
       <div style="display:inline-block; background:var(--primary-light); color:var(--primary); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700; margin-bottom:24px;">API v2.0 is Live</div>
       <h1 style="font-size: clamp(36px, 6vw, 64px); line-height: 1.1; margin-bottom: 24px;">Forms without the <span style="color: var(--primary)">backend</span> code.</h1>
-      <p style="font-size: 16px; color: var(--text-muted); margin-bottom: 40px; line-height: 1.6;">Capture submissions, handle media uploads, and track activity instantly. Your data is beautifully organized and completely secure.</p>
+      <p style="font-size: 16px; color: var(--text-muted); margin-bottom: 40px; line-height: 1.6;">Capture submissions, handle huge media uploads, and track activity instantly. Your data is beautifully organized and completely secure.</p>
       <button class="btn btn-primary" style="padding: 16px 32px; font-size: 16px;" onclick="switchRootView('view-login')">Start Building Free</button>
     </div>
 
@@ -199,7 +199,7 @@
         <div class="bento-card">
           <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg></div>
           <h3 class="title-h2">Smart Snippets</h3>
-          <p class="text-muted">Generate dynamic JS endpoints for every project. We automatically parse forms and capture files to bypass limits.</p>
+          <p class="text-muted">Generate dynamic JS endpoints for every project. We automatically parse forms and capture files securely to bypass database limits.</p>
         </div>
         <div class="bento-card">
           <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></div>
@@ -208,8 +208,8 @@
         </div>
         <div class="bento-card">
           <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
-          <h3 class="title-h2">Rich Media Support</h3>
-          <p class="text-muted">Accept image, audio, and video uploads directly through your HTML forms and view them natively in your dashboard.</p>
+          <h3 class="title-h2">Massive Media Support</h3>
+          <p class="text-muted">Accept large video and 10-minute audio uploads directly through your forms via Firebase Cloud Storage.</p>
         </div>
       </div>
     </div>
@@ -387,7 +387,7 @@
           <div id="tab-sdk" class="tab-content">
             <div class="bento-card" style="margin-bottom: 24px;">
               <h3 class="title-h2">1. Your Direct API Endpoint</h3>
-              <p class="text-muted" style="margin-bottom: 16px;">Send POST requests securely to this REST endpoint to save unstructured data directly to your database.</p>
+              <p class="text-muted" style="margin-bottom: 16px;">Send POST requests securely to this REST endpoint to save structured data directly to your database.</p>
               <div style="display:flex; gap:12px; align-items:center; background: var(--bg-main); padding: 8px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap;">
                  <input type="text" readonly id="ui-api-url" class="input" style="flex-grow:1; border:none; font-family:monospace; font-weight:600; color: var(--primary); padding: 8px 12px; margin:0; box-shadow:none; background:transparent;" />
                  <button class="btn btn-black" onclick="copyApiUrl()" style="flex-shrink:0; width: 100%;">Copy Link</button>
@@ -395,8 +395,8 @@
             </div>
 
             <div class="bento-card">
-              <h3 class="title-h2">2. Universal Integration Script</h3>
-              <p class="text-muted">Place this script in your HTML. It automatically captures any form inputs, converts file uploads to Base64, and sends everything as a flat payload directly to your backend.</p>
+              <h3 class="title-h2">2. Universal Integration Script (Supports Massive Files)</h3>
+              <p class="text-muted">Place this script in your HTML. It captures text inputs and uploads large files (like 10-min audio) straight to Firebase Storage, then saves the link to your dashboard.</p>
               <div class="code-box" style="margin-top: 16px; position:relative;">
                 <button onclick="copySdkCode()" style="position:absolute; top:12px; right:12px; background:var(--bg-main); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main);">Copy Script</button>
                 <div id="ui-sdk-code" style="white-space: pre-wrap;"></div>
@@ -604,10 +604,10 @@
           submissionsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
           document.getElementById('stat-sub-count').textContent = submissionsData.length;
           
-          // ROBUST MEDIA COUNTER for flat data
+          // ROBUST MEDIA COUNTER for new storage tags
           const mediaCount = submissionsData.filter(s => {
             const strData = JSON.stringify(s || {});
-            return strData.includes('data:image') || strData.includes('data:video') || strData.includes('data:audio');
+            return strData.includes('FILE:IMAGE|') || strData.includes('FILE:VIDEO|') || strData.includes('FILE:AUDIO|') || strData.includes('FILE:RAW|') || strData.includes('data:image');
           }).length;
           
           document.getElementById('stat-media-count').textContent = mediaCount;
@@ -707,17 +707,18 @@
       document.getElementById('ui-form-title').textContent = f.name;
       document.getElementById('ui-form-type-badge').textContent = f.type === 'form' ? 'Web Form' : 'Tracker';
       
+      const bucket = firebaseConfig.storageBucket;
       const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/artifacts/${APP_ID}/users/${currentUser.uid}/projects/${activeProjectId}/forms/${activeFormId}/submissions`;
       document.getElementById('ui-api-url').value = url;
 
       const web3Fetch = f.web3Key ? `\n        // Email Notification\n        await fetch('https://api.web3forms.com/submit', { \n          method: 'POST', \n          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, \n          body: JSON.stringify({ access_key: "${f.web3Key}", subject: "New FlowForm Submission", ...payload }) \n        });` : '';
 
-      // SDK dynamically captures all fields flatly
+      // SDK automatically captures massive files, pushes to Firebase Storage, and saves the link!
       const snippet = `<!-- Complete Integration Example -->
 <form id="my-flow-form">
   <input type="email" name="email" placeholder="Your Email" required>
   <textarea name="message" placeholder="Message" required></textarea>
-  <input type="file" name="attachment">
+  <input type="file" name="attachment" accept="image/*, audio/*, video/*">
   <button type="submit">Submit</button>
 </form>
 
@@ -731,32 +732,55 @@
       e.preventDefault();
       const btn = form.querySelector('button[type="submit"]');
       const origText = btn ? btn.innerText : 'Submit';
-      if(btn) { btn.disabled = true; btn.innerText = "Sending..."; }
+      if(btn) { btn.disabled = true; btn.innerText = "Uploading Media... Please wait."; }
       
       try {
         let payload = {};
         const formData = new FormData(form);
+        
         for (let [key, value] of formData.entries()) {
           if (value instanceof File && value.size > 0) {
-            const reader = new FileReader();
-            payload[key] = await new Promise((res, rej) => { 
-              reader.onload = () => res(reader.result); 
-              reader.onerror = rej; 
-              reader.readAsDataURL(value); 
+            
+            // Upload directly to Firebase Cloud Storage (Handles massive files >1MB easily)
+            const ext = value.name.split('.').pop();
+            const fileName = 'flowform_uploads/' + Date.now() + '_' + Math.random().toString(36).substring(7) + '.' + ext;
+            const uploadUrl = 'https://firebasestorage.googleapis.com/v0/b/${bucket}/o?name=' + encodeURIComponent(fileName);
+            
+            const uploadRes = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': value.type },
+              body: value
             });
-          } else { payload[key] = value; }
+            
+            if(!uploadRes.ok) throw new Error("File upload failed. Ensure Storage Rules are set to public.");
+            
+            const uploadData = await uploadRes.json();
+            const downloadUrl = 'https://firebasestorage.googleapis.com/v0/b/${bucket}/o/' + encodeURIComponent(fileName) + '?alt=media&token=' + uploadData.downloadTokens;
+            
+            // Add Smart Type Prefix for Dashboard Rendering
+            let typePrefix = 'FILE:RAW|';
+            if(value.type.startsWith('image/')) typePrefix = 'FILE:IMAGE|';
+            else if(value.type.startsWith('audio/')) typePrefix = 'FILE:AUDIO|';
+            else if(value.type.startsWith('video/')) typePrefix = 'FILE:VIDEO|';
+            
+            payload[key] = typePrefix + downloadUrl;
+            
+          } else { 
+            payload[key] = value; 
+          }
         }
 
-        // Send flat payload
+        // Structure payload securely inside a 'data' object
         const fields = { 
           createdAt: { integerValue: Date.now().toString() }, 
-          userAgent: { stringValue: navigator.userAgent }
+          userAgent: { stringValue: navigator.userAgent },
+          data: { mapValue: { fields: {} } }
         };
         for (const [k, v] of Object.entries(payload)) {
-          fields[k] = { stringValue: String(v) };
+          fields.data.mapValue.fields[k] = { stringValue: String(v) };
         }
 
-        // Save to Database
+        // Save metadata and links to Firestore Database
         const dbRes = await fetch("${url}", { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
@@ -792,7 +816,7 @@
       listenToSubmissions();
     }
 
-    // --- BULLETPROOF FLAT DATA RENDERER & STRUCTURING ---
+    // --- BULLETPROOF DATA RENDERER & STRUCTURING ---
     function renderSubmissions() {
       const container = document.getElementById('submissions-list');
       if(!container) return; 
@@ -806,6 +830,7 @@
       const endDate = endDateVal ? new Date(endDateVal).getTime() + 86399999 : Infinity; 
 
       const filtered = submissionsData.filter(s => {
+        // Read from structured data or flat fallback
         const payloadObj = { ...(s.data || {}) }; 
         const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
         for (const key in s) {
@@ -822,7 +847,7 @@
         const subTime = Number(s.createdAt) || 0;
         const matchesDate = subTime >= startDate && subTime <= endDate;
         
-        const hasMedia = strData.includes('data:image') || strData.includes('data:video') || strData.includes('data:audio');
+        const hasMedia = strData.includes('FILE:IMAGE|') || strData.includes('FILE:VIDEO|') || strData.includes('FILE:AUDIO|') || strData.includes('FILE:RAW|') || strData.includes('data:image/');
         const matchesType = typeVal === 'all' || (typeVal === 'media' && hasMedia);
 
         return matchesSearch && matchesDate && matchesType;
@@ -834,7 +859,7 @@
       }
 
       container.innerHTML = filtered.map(sub => {
-        // Build flat payload cleanly
+        // Read from structured data or flat fallback cleanly
         const payloadObj = { ...(sub.data || {}) }; 
         const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
         for (const key in sub) {
@@ -865,22 +890,30 @@
             longTextFields.push(`<div class="data-field" style="grid-column: 1 / -1"><div class="data-field-label">${escapeHTML(cleanKey)}</div><pre style="font-size:12px; white-space:pre-wrap; margin:0; background:var(--bg-alt); padding:12px; border-radius:8px; border:1px solid var(--border-color); overflow-x:auto; color:var(--text-main);">${escapeHTML(JSON.stringify(v, null, 2))}</pre></div>`);
           } else {
             const strV = String(v);
-            const safeStrV = escapeHTML(strV);
             
-            // Analyze file types and bind directly to HTML players
-            if(strV.startsWith('data:image/')) {
-              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><img src="${safeStrV}" style="max-height: 200px; max-width: 100%; border-radius: 6px; object-fit: contain; background: var(--bg-main); border: 1px solid var(--border-color);"></div>`);
-            } else if(strV.startsWith('data:audio/')) {
-              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><audio controls style="width: 100%; height: 40px;" src="${safeStrV}"></audio></div>`);
-            } else if(strV.startsWith('data:video/')) {
-              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><video controls style="max-height: 250px; max-width: 100%; border-radius: 6px; border: 1px solid var(--border-color); background: #000;" src="${safeStrV}"></video></div>`);
-            } else if(strV.startsWith('data:')) {
-               // Fallback button for unrecognized base64 documents (PDF, Docx, etc)
-              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><a href="${safeStrV}" download="${escapeHTML(cleanKey)}_attachment" class="btn btn-white" style="font-size:12px; padding:8px 12px; text-decoration:none; text-align:center;">Download Document</a></div>`);
-            } else if(strV.length > 60 || strV.includes('\n')) {
-              longTextFields.push(`<div class="data-field" style="grid-column: 1 / -1"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value" style="background:var(--bg-alt); padding:12px; border-radius:8px; border:1px solid var(--border-color);">${safeStrV}</div></div>`);
+            // Analyze file types mapped from Firebase Storage URLs
+            if(strV.startsWith('FILE:IMAGE|')) {
+              const url = strV.split('|')[1];
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><a href="${url}" target="_blank"><img src="${url}" style="max-height: 200px; max-width: 100%; border-radius: 6px; object-fit: contain; background: var(--bg-main); border: 1px solid var(--border-color);"></a></div>`);
+            } else if(strV.startsWith('FILE:AUDIO|')) {
+              const url = strV.split('|')[1];
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><audio controls style="width: 100%; height: 40px;" src="${url}"></audio></div>`);
+            } else if(strV.startsWith('FILE:VIDEO|')) {
+              const url = strV.split('|')[1];
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><video controls style="max-height: 250px; max-width: 100%; border-radius: 6px; border: 1px solid var(--border-color); background: #000;" src="${url}"></video></div>`);
+            } else if(strV.startsWith('FILE:RAW|')) {
+              const url = strV.split('|')[1];
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><a href="${url}" target="_blank" class="btn btn-white" style="font-size:12px; padding:8px 12px; text-decoration:none; text-align:center;">Download File</a></div>`);
+            } 
+            // Fallback for older base64 entries
+            else if(strV.startsWith('data:image/')) {
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><img src="${strV}" style="max-height: 200px; max-width: 100%; border-radius: 6px; object-fit: contain; background: var(--bg-main); border: 1px solid var(--border-color);"></div>`);
+            }
+            // Standard Text
+            else if(strV.length > 60 || strV.includes('\n')) {
+              longTextFields.push(`<div class="data-field" style="grid-column: 1 / -1"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value" style="background:var(--bg-alt); padding:12px; border-radius:8px; border:1px solid var(--border-color);">${escapeHTML(strV)}</div></div>`);
             } else {
-              textFields.push(`<div class="data-field"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value">${safeStrV}</div></div>`);
+              textFields.push(`<div class="data-field"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value">${escapeHTML(strV)}</div></div>`);
             }
           }
         }
