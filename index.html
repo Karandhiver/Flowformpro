@@ -389,7 +389,7 @@
           <div id="tab-sdk" class="tab-content">
             <div class="bento-card" style="margin-bottom: 24px;">
               <h3 class="title-h2">1. Your Direct API Endpoint</h3>
-              <p class="text-muted" style="margin-bottom: 16px;">Send POST requests securely to this REST endpoint to save data directly to your database.</p>
+              <p class="text-muted" style="margin-bottom: 16px;">Send POST requests securely to this REST endpoint to save unstructured data directly to your database.</p>
               <div style="display:flex; gap:12px; align-items:center; background: var(--bg-main); padding: 8px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap;">
                  <input type="text" readonly id="ui-api-url" class="input" style="flex-grow:1; border:none; font-family:monospace; font-weight:600; color: var(--primary); padding: 8px 12px; margin:0; box-shadow:none; background:transparent;" />
                  <button class="btn btn-black" onclick="copyApiUrl()" style="flex-shrink:0; width: 100%;">Copy Link</button>
@@ -398,7 +398,7 @@
 
             <div class="bento-card">
               <h3 class="title-h2">2. Universal Integration Script</h3>
-              <p class="text-muted">Place this script in your HTML. It automatically captures text forms, converts file uploads to Base64 (saving them to your DB), and can trigger Web3Forms emails dynamically.</p>
+              <p class="text-muted">Place this script in your HTML. It automatically captures any form inputs, converts file uploads to Base64, and sends everything as a flat payload directly to your backend.</p>
               <div class="code-box" style="margin-top: 16px; position:relative;">
                 <button onclick="copySdkCode()" style="position:absolute; top:12px; right:12px; background:var(--bg-main); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main);">Copy Script</button>
                 <div id="ui-sdk-code" style="white-space: pre-wrap;"></div>
@@ -606,7 +606,12 @@
           submissionsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
           document.getElementById('stat-sub-count').textContent = submissionsData.length;
           
-          const mediaCount = submissionsData.filter(s => JSON.stringify(s.data).includes('data:image') || JSON.stringify(s.data).includes('data:video') || JSON.stringify(s.data).includes('data:audio')).length;
+          // ROBUST MEDIA COUNTER for flat data
+          const mediaCount = submissionsData.filter(s => {
+            const strData = JSON.stringify(s || {});
+            return strData.includes('data:image') || strData.includes('data:video') || strData.includes('data:audio');
+          }).length;
+          
           document.getElementById('stat-media-count').textContent = mediaCount;
           
           renderSubmissions();
@@ -709,6 +714,7 @@
 
       const web3Fetch = f.web3Key ? `\n        // Email Notification\n        await fetch('https://api.web3forms.com/submit', { \n          method: 'POST', \n          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, \n          body: JSON.stringify({ access_key: "${f.web3Key}", subject: "New FlowForm Submission", ...payload }) \n        });` : '';
 
+      // MODIFIED: SDK now sends completely flat unstructured data without nesting inside "data: {}"
       const snippet = `<!-- Complete Integration Example -->
 <form id="my-flow-form">
   <input type="email" name="email" placeholder="Your Email" required>
@@ -743,13 +749,13 @@
           } else { payload[key] = value; }
         }
 
+        // We push fields absolutely flat to root
         const fields = { 
           createdAt: { integerValue: Date.now().toString() }, 
-          userAgent: { stringValue: navigator.userAgent }, 
-          data: { mapValue: { fields: {} } } 
+          userAgent: { stringValue: navigator.userAgent }
         };
         for (const [k, v] of Object.entries(payload)) {
-          fields.data.mapValue.fields[k] = { stringValue: String(v) };
+          fields[k] = { stringValue: String(v) };
         }
 
         // Save to Database
@@ -788,21 +794,38 @@
       listenToSubmissions();
     }
 
+    // --- BULLETPROOF FLAT DATA RENDERER ---
     function renderSubmissions() {
       const container = document.getElementById('submissions-list');
-      const searchFilter = document.getElementById('search-input').value.toLowerCase();
+      if(!container) return; // Safety check
       
-      const startDateVal = document.getElementById('filter-start-date').value;
-      const endDateVal = document.getElementById('filter-end-date').value;
-      const typeVal = document.getElementById('filter-type').value;
+      const searchFilter = (document.getElementById('search-input')?.value || '').toLowerCase();
+      const startDateVal = document.getElementById('filter-start-date')?.value;
+      const endDateVal = document.getElementById('filter-end-date')?.value;
+      const typeVal = document.getElementById('filter-type')?.value || 'all';
 
       const startDate = startDateVal ? new Date(startDateVal).getTime() : 0;
       const endDate = endDateVal ? new Date(endDateVal).getTime() + 86399999 : Infinity; // end of day
 
       const filtered = submissionsData.filter(s => {
-        const strData = JSON.stringify(s.data);
-        const matchesSearch = strData.toLowerCase().includes(searchFilter);
-        const matchesDate = s.createdAt >= startDate && s.createdAt <= endDate;
+        // Extract flat payload excluding system metadata for searching
+        const payloadObj = { ...(s.data || {}) }; // backward compatibility with older data wrapper
+        const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
+        for (const key in s) {
+          if (!systemKeys.includes(key)) {
+            payloadObj[key] = s[key];
+          }
+        }
+
+        let strData = "";
+        try { strData = JSON.stringify(payloadObj).toLowerCase(); } catch(e) {}
+        
+        const matchesSearch = strData.includes(searchFilter);
+        
+        // Robust Date Check (Handles string or number formats from DB)
+        const subTime = Number(s.createdAt) || 0;
+        const matchesDate = subTime >= startDate && subTime <= endDate;
+        
         const hasMedia = strData.includes('data:image') || strData.includes('data:video') || strData.includes('data:audio');
         const matchesType = typeVal === 'all' || (typeVal === 'media' && hasMedia);
 
@@ -815,21 +838,36 @@
       }
 
       container.innerHTML = filtered.map(sub => {
-        const keys = Object.keys(sub.data);
+        // Extract flat payload for display
+        const payloadObj = { ...(sub.data || {}) }; // backward compatibility
+        const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
+        for (const key in sub) {
+          if (!systemKeys.includes(key)) {
+            payloadObj[key] = sub[key];
+          }
+        }
+        
+        const keys = Object.keys(payloadObj);
         const nameKey = keys.find(k => k.toLowerCase().includes('name'));
         const emailKey = keys.find(k => k.toLowerCase().includes('email'));
-        const title = nameKey ? escapeHTML(sub.data[nameKey]) : (emailKey ? escapeHTML(sub.data[emailKey]) : 'Data Payload');
-        const subtitle = emailKey && nameKey ? escapeHTML(sub.data[emailKey]) : 'System Captured';
+        
+        const title = nameKey ? escapeHTML(payloadObj[nameKey]) : (emailKey ? escapeHTML(payloadObj[emailKey]) : 'Data Payload');
+        const subtitle = emailKey && nameKey ? escapeHTML(payloadObj[emailKey]) : 'System Captured';
 
         let fieldsHTML = '';
-        for(const [k,v] of Object.entries(sub.data)) {
+        for(const [k,v] of Object.entries(payloadObj)) {
           if(k===nameKey || k===emailKey) continue;
+          
           let mediaHTML = `<div class="data-field-value">${escapeHTML(v)}</div>`;
           if(String(v).startsWith('data:image/')) mediaHTML = `<img src="${v}" class="media-preview">`;
           else if(String(v).startsWith('data:audio/')) mediaHTML = `<audio controls class="media-audio"><source src="${v}"></audio>`;
+          else if(String(v).startsWith('data:video/')) mediaHTML = `<video controls class="media-preview"><source src="${v}"></video>`;
           
           fieldsHTML += `<div class="data-field" style="${String(v).startsWith('data:') ? 'grid-column:1/-1;' : ''}"><div class="data-field-label">${escapeHTML(k)}</div>${mediaHTML}</div>`;
         }
+
+        // Robust time formatting
+        const timeStr = sub.createdAt ? new Date(Number(sub.createdAt)).toLocaleString() : 'Unknown Date';
 
         return `
           <div class="data-card">
@@ -838,7 +876,7 @@
                 <div class="data-important-title">${title}</div>
                 <div class="data-important-subtitle">${subtitle}</div>
               </div>
-              <div class="data-timestamp">${new Date(sub.createdAt).toLocaleString()}</div>
+              <div class="data-timestamp">${timeStr}</div>
             </div>
             <div class="data-body">${fieldsHTML}</div>
           </div>
