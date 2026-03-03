@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  <title>FlowForm | The Form Backend</title>
+  
+  <!-- Firebase (Native JS Compat Libraries) -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* === DESIGN TOKENS === */
+    :root {
+      --bg-main: #f9fafb; --bg-alt: #ffffff; --text-main: #111827; --text-muted: #6b7280;
+      --border-color: #e5e7eb; --primary: #e53238; --primary-hover: #d42d33; --primary-light: #fef2f2;
+      --danger: #dc2626; --danger-bg: #fef2f2; --danger-border: #fecaca; --black: #111827; --white: #ffffff;
+      --focus-ring: rgba(229, 50, 56, 0.15);
+      --font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif;
+    }
+
+    /* === RESET & BASE === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background-color: var(--bg-main); color: var(--text-main); font-family: var(--font-family); -webkit-font-smoothing: antialiased; width: 100%; height: 100%; overflow: hidden; position: relative; }
+    
+    /* Typography */
+    h1, h2, h3, h4 { font-weight: 800; letter-spacing: -0.03em; color: var(--text-main); word-break: break-word; }
+    p { line-height: 1.6; word-break: break-word; }
+    .text-muted { color: var(--text-muted); font-size: 14px; }
+    .title-h1 { font-size: 28px; margin-bottom: 8px; }
+    .title-h2 { font-size: 18px; margin-bottom: 8px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; white-space: nowrap; max-width: 100%; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(229,50,56,0.2); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(229,50,56,0.3); }
+    .btn-black { background: var(--black); color: var(--white); }
+    .btn-black:hover:not(:disabled) { background: #000; transform: translateY(-1px); }
+    .btn-white { background: var(--bg-alt); color: var(--text-main); border: 1px solid var(--border-color); }
+    .btn-white:hover:not(:disabled) { background: var(--bg-main); }
+    .btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+    .btn-icon { padding: 8px; background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 8px; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0;}
+    .btn-icon:hover { background: var(--bg-main); color: var(--text-main); }
+
+    /* Inputs */
+    .input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 16px; outline: none; transition: border 0.2s, box-shadow 0.2s; font-family: inherit; background: var(--bg-alt); color: var(--text-main); }
+    .input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+    .label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px; }
+    .form-group { margin-bottom: 24px; width: 100%; }
+
+    /* Custom Toggle */
+    .toggle-wrapper { display: flex; align-items: center; justify-content: space-between; padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; cursor: pointer; background: var(--bg-main); margin-bottom: 24px; width: 100%;}
+    .toggle-switch { position: relative; width: 44px; height: 24px; background: var(--border-color); border-radius: 24px; transition: 0.3s; flex-shrink: 0; }
+    .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .toggle-checkbox { display: none; }
+    .toggle-checkbox:checked + .toggle-switch { background: var(--primary); }
+    .toggle-checkbox:checked + .toggle-switch::after { transform: translateX(20px); }
+
+    /* === LAYOUTS (Views) === */
+    .view { display: none; height: 100%; width: 100%; flex-direction: column; overflow-y: auto; background: var(--bg-main); }
+    .view.active { display: flex; }
+    
+    .app-layout { display: none; height: 100%; width: 100%; overflow: hidden; background: var(--bg-main); }
+    .app-layout.active { display: flex; }
+
+    /* Sidebar */
+    .sidebar { width: 280px; background: var(--bg-alt); display: flex; flex-direction: column; z-index: 40; padding: 24px; gap: 32px; border-right: 1px solid var(--border-color); flex-shrink: 0; }
+    .brand { font-size: 20px; font-weight: 900; display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--primary); letter-spacing: -0.03em;}
+    .nav-list { display: flex; flex-direction: column; gap: 8px; flex-grow: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; color: var(--text-muted); font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
+    .nav-item:hover { color: var(--primary); background: var(--primary-light); }
+    .nav-item.active { background: var(--primary-light); color: var(--primary); }
+    
+    /* Main Area */
+    .main-area { flex-grow: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; background: var(--bg-main); width: 100%; max-width: 100vw; -webkit-overflow-scrolling: touch;}
+    .top-header { background: var(--bg-alt); padding: 24px 40px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 30; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; width: 100%;}
+    .workspace { padding: 32px 40px 100px; max-width: 1400px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 32px; }
+
+    /* Workspace Sub-Views */
+    .workspace-view { display: none; flex-direction: column; height: 100%; width: 100%; }
+    .workspace-view.active { display: flex; }
+
+    /* === BENTO UI === */
+    .bento-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; width: 100%; }
+    .bento-card { background: var(--bg-alt); border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease; width: 100%; overflow: hidden;}
+    .bento-card.clickable { cursor: pointer; }
+    .bento-card.clickable:hover { transform: translateY(-4px); box-shadow: 0 12px 30px rgba(229,50,56,0.08); border-color: var(--primary); }
+    .bento-icon { width: 48px; height: 48px; background: var(--primary-light); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--primary); flex-shrink: 0; }
+    
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; width: 100%; }
+    .stat-card { background: var(--bg-alt); border: 1px solid var(--border-color); padding: 20px; border-radius: 16px; width: 100%; }
+    .stat-header { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 12px;}
+    .stat-value { font-size: 32px; font-weight: 900; color: var(--text-main); }
+
+    /* Tables */
+    .table-container { background: var(--bg-alt); border: 1px solid var(--border-color); border-radius: 20px; overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;}
+    .table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
+    .table th { padding: 16px 24px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border-color); background: var(--bg-main); white-space: nowrap; }
+    .table td { padding: 16px 24px; border-bottom: 1px solid var(--border-color); font-size: 14px; vertical-align: middle; }
+    .table tr.clickable-row:hover td { background: var(--bg-main); cursor: pointer; }
+    .badge { display: inline-flex; align-items: center; padding: 4px 10px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap;}
+
+    /* Smart Inbox Cards */
+    .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; background: var(--bg-alt); padding: 16px; border-radius: 16px; border: 1px solid var(--border-color); align-items: center; width: 100%; }
+    .filter-search { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; background: var(--bg-main); padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border-color); }
+    .filter-search input { border: none; background: transparent; outline: none; width: 100%; font-size: 14px; font-family: inherit; color: var(--text-main); }
+    
+    .data-card { background: var(--bg-alt); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); margin-bottom: 16px; width: 100%; overflow: hidden;}
+    .data-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px dashed var(--border-color); padding-bottom: 16px; flex-wrap: wrap; gap: 12px;}
+    .data-important-title { font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; word-break: break-word;}
+    .data-important-subtitle { font-size: 14px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px; word-break: break-word;}
+    .data-timestamp { font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--bg-main); padding: 6px 12px; border-radius: 12px; border: 1px solid var(--border-color); white-space: nowrap;}
+    .data-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; width: 100%; }
+    .data-field { background: var(--bg-main); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); width: 100%; overflow: hidden; }
+    .data-field-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+    .data-field-value { font-size: 14px; color: var(--text-main); word-break: break-word; white-space: pre-wrap; line-height: 1.5; overflow-wrap: break-word; }
+    .media-preview { max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; background: var(--bg-main); display: block; margin-top: 8px;}
+    .media-audio { width: 100%; max-width: 100%; height: 40px; display: block; margin-top: 8px;}
+
+    /* Tabs */
+    .tabs { display: flex; gap: 32px; overflow-x: auto; margin-top: 16px; border-bottom: 1px solid var(--border-color); scrollbar-width: none; width: 100%; max-width: 100vw; -webkit-overflow-scrolling: touch;}
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 0 0 12px 0; background: none; border: none; font-size: 14px; font-weight: 700; color: var(--text-muted); cursor: pointer; position: relative; white-space: nowrap; transition: 0.2s;}
+    .tab:hover { color: var(--primary); }
+    .tab.active { color: var(--primary); }
+    .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background: var(--primary); border-radius: 3px 3px 0 0; }
+    .tab-content { display: none; animation: fadeIn 0.3s ease; width: 100%; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.6); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; backdrop-filter: blur(4px); }
+    .modal-overlay.active { display: flex; }
+    .modal-content { background: var(--bg-alt); border-radius: 20px; width: 100%; max-width: 450px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); display: flex; flex-direction: column; overflow: hidden; animation: slideUp 0.3s ease; max-height: 90vh;}
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header { padding: 24px 24px 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;}
+    .modal-body { padding: 24px; overflow-y: auto;}
+    .modal-footer { padding: 20px 24px; background: var(--bg-main); border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px; flex-shrink: 0; flex-wrap: wrap;}
+
+    /* Misc */
+    .code-box { background: #111827; color: #e5e7eb; padding: 20px; border-radius: 12px; font-family: monospace; font-size: 13px; line-height: 1.5; overflow-x: auto; width: 100%; white-space: pre-wrap; word-break: break-all;}
+    .chart-container { height: 220px; display: flex; align-items: flex-end; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-top: 24px; width: 100%; overflow-x: auto;}
+    .chart-bar-wrap { flex: 1; min-width: 30px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 8px; height: 100%; }
+    .chart-bar { width: 100%; background: var(--primary-light); border-radius: 6px 6px 0 0; position: relative; transition: 0.3s; cursor: pointer; }
+    .chart-bar:hover { background: var(--primary); }
+
+    /* Mobile */
+    .mobile-nav { display: none; }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .app-layout { flex-direction: column; }
+      .mobile-nav { display: flex; justify-content: space-around; background: var(--bg-alt); padding: 12px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; border-top: 1px solid var(--border-color); padding-bottom: calc(12px + env(safe-area-inset-bottom)); width: 100%; }
+      .mobile-nav button { background: none; border: none; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; cursor: pointer;}
+      .mobile-nav button.active { color: var(--primary); }
+      .top-header { padding: 16px; flex-direction: column; align-items: flex-start; width: 100%; box-sizing: border-box; }
+      .top-header .btn { width: 100%; }
+      .workspace { padding: 16px 16px 100px 16px; gap: 16px; width: 100%; box-sizing: border-box;}
+      .bento-grid, .stats-grid, .data-body { grid-template-columns: 1fr; }
+      .data-header { flex-direction: column; gap: 8px; }
+      .data-timestamp { align-self: flex-start; }
+      .tabs { padding: 0 16px; margin-left: -16px; margin-right: -16px; width: 100vw; max-width: 100vw; }
+      .tabs .tab:first-child { margin-left: 16px; }
+      .tabs .tab:last-child { margin-right: 16px; }
+      .modal-footer { flex-direction: column; }
+      .modal-footer .btn { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================== -->
+  <!-- 1. LANDING PAGE VIEW                       -->
+  <!-- ========================================== -->
+  <div id="view-landing" class="view active" style="background: var(--bg-alt);">
+    <div style="padding: 24px 40px; display: flex; justify-content: space-between; align-items: center; max-width: 1400px; margin: 0 auto; width: 100%;">
+      <div style="font-weight: 900; font-size: 22px; display: flex; align-items: center; gap: 8px; color: var(--primary);">
+        FlowForm Pro
+      </div>
+      <button class="btn btn-white" onclick="switchRootView('view-login')">Console Login</button>
+    </div>
+    
+    <div style="text-align: center; padding: 60px 16px; max-width: 800px; margin: 0 auto; width: 100%;">
+      <div style="display:inline-block; background:var(--primary-light); color:var(--primary); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700; margin-bottom:24px;">API v2.0 is Live</div>
+      <h1 style="font-size: clamp(36px, 6vw, 64px); line-height: 1.1; margin-bottom: 24px;">Forms without the <span style="color: var(--primary)">backend</span> code.</h1>
+      <p style="font-size: 16px; color: var(--text-muted); margin-bottom: 40px; line-height: 1.6;">Capture submissions, handle media uploads, and track activity instantly. Your data is beautifully organized and completely secure.</p>
+      <button class="btn btn-primary" style="padding: 16px 32px; font-size: 16px;" onclick="switchRootView('view-login')">Start Building Free</button>
+    </div>
+
+    <div style="padding: 0 16px 100px; max-width: 1400px; margin: 0 auto; width: 100%;">
+      <div class="bento-grid">
+        <div class="bento-card">
+          <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg></div>
+          <h3 class="title-h2">Smart Snippets</h3>
+          <p class="text-muted">Generate dynamic JS endpoints for every project. We automatically parse forms and capture files to bypass limits.</p>
+        </div>
+        <div class="bento-card">
+          <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></div>
+          <h3 class="title-h2">SaaS Data Isolation</h3>
+          <p class="text-muted">Built for scale. Every user's data is strictly partitioned in our backend. No cross-contamination, absolute privacy.</p>
+        </div>
+        <div class="bento-card">
+          <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+          <h3 class="title-h2">Rich Media Support</h3>
+          <p class="text-muted">Accept image, audio, and video uploads directly through your HTML forms and view them natively in your dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 2. LOGIN VIEW                              -->
+  <!-- ========================================== -->
+  <div id="view-login" class="view" style="justify-content: center; align-items: center; padding: 16px;">
+    <div class="bento-card" style="max-width: 400px; width: 100%; text-align: center; padding: 40px 24px;">
+      <h2 class="title-h1" style="font-size: 32px; color: var(--primary); margin-bottom: 24px;">FlowForm</h2>
+      <h2 class="title-h1" style="font-size: 24px;">Console Login</h2>
+      <p class="text-muted" style="margin-bottom: 32px;">Secure Authentication</p>
+      
+      <button id="btn-google-login" class="btn btn-white" style="width: 100%; padding: 16px; font-size: 15px;" onclick="doLogin()">
+        <svg viewBox="0 0 24 24" width="18" height="18" style="margin-right: 8px;"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
+        Continue with Google
+      </button>
+      <button class="btn" style="background:none; color:var(--text-muted); margin-top:16px; width:100%;" onclick="switchRootView('view-landing')">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 3. APP WORKSPACE (Logged In)               -->
+  <!-- ========================================== -->
+  <div id="view-workspace" class="app-layout">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand" style="font-size: 24px;" onclick="openWorkspaceView('ws-dashboard')">
+        FlowForm
+      </div>
+      <nav class="nav-list">
+        <div class="nav-item active" onclick="openWorkspaceView('ws-dashboard')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg> Workspace
+        </div>
+      </nav>
+      <div style="margin-top: auto;">
+        <div style="background:var(--bg-main); padding:16px; border-radius:12px; border: 1px solid var(--border-color); margin-bottom:12px;">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Logged in as</div>
+          <div id="ui-user-email" style="font-size:13px; font-weight:700; word-break:break-all;">...</div>
+        </div>
+        <div class="nav-item" style="color:var(--danger);" onclick="doLogout()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Log out
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile Nav -->
+    <div class="mobile-nav">
+      <button class="active" onclick="openWorkspaceView('ws-dashboard')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg> Workspace
+      </button>
+      <button onclick="doLogout()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> Logout
+      </button>
+    </div>
+
+    <main class="main-area">
+      
+      <!-- WS-A: DASHBOARD -->
+      <div id="ws-dashboard" class="workspace-view active">
+        <header class="top-header">
+          <h2 class="title-h1" style="margin:0;">Overview</h2>
+          <button class="btn btn-primary" onclick="openModal('modal-new-project')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Project
+          </button>
+        </header>
+        <div class="workspace">
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-header">Total Projects</div><div class="stat-value" id="stat-proj-count">0</div></div>
+            <div class="stat-card"><div class="stat-header">Active Endpoints</div><div class="stat-value" id="stat-form-count">0</div></div>
+          </div>
+          <h2 class="title-h2">Your Projects</h2>
+          <div class="bento-grid" id="projects-grid">
+            <!-- Rendered via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- WS-B: PROJECT -->
+      <div id="ws-project" class="workspace-view">
+        <header class="top-header" style="flex-direction: column; align-items: flex-start; gap: 16px;">
+          <button class="btn-icon" style="padding:0; color:var(--text-muted); background:none; border:none; justify-content:flex-start;" onclick="openWorkspaceView('ws-dashboard')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back to Workspace
+          </button>
+          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <h2 class="title-h1" style="margin:0;" id="ui-proj-title">Project Name</h2>
+            <button class="btn btn-primary" onclick="openModal('modal-new-form')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Endpoint
+            </button>
+          </div>
+        </header>
+        <div class="workspace">
+          <div class="table-container">
+            <table class="table">
+              <thead><tr><th>Endpoint Name</th><th>Type</th><th>Created</th></tr></thead>
+              <tbody id="forms-table-body">
+                <!-- Rendered via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- WS-C: FORM / ENDPOINT -->
+      <div id="ws-form" class="workspace-view">
+        <header style="background: var(--bg-alt); padding-top: 24px; border-bottom: 1px solid var(--border-color); width: 100%;">
+          <div style="padding: 0 16px; display: flex; flex-direction: column; gap: 8px;">
+            <button class="btn-icon" style="padding:0; color:var(--text-muted); background:none; border:none; justify-content:flex-start;" onclick="openWorkspaceView('ws-project')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back
+            </button>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+              <h2 class="title-h1" style="margin:0;" id="ui-form-title">Endpoint</h2>
+              <span class="badge" id="ui-form-type-badge">Web Form</span>
+            </div>
+          </div>
+          <div class="tabs">
+            <button class="tab active" onclick="switchFormTab('tab-inbox', this)">Data Explorer</button>
+            <button class="tab" onclick="switchFormTab('tab-analytics', this)">Analytics</button>
+            <button class="tab" onclick="switchFormTab('tab-sdk', this)">Integration SDK</button>
+            <button class="tab" onclick="switchFormTab('tab-settings', this)">Settings</button>
+          </div>
+        </header>
+
+        <div class="workspace">
+          
+          <!-- TAB 1: INBOX -->
+          <div id="tab-inbox" class="tab-content active">
+            <div class="filter-bar">
+              <div class="filter-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="search-input" placeholder="Search payloads..." oninput="renderSubmissions()">
+              </div>
+            </div>
+            <div id="submissions-list">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- TAB 2: ANALYTICS -->
+          <div id="tab-analytics" class="tab-content">
+            <div class="stats-grid">
+              <div class="stat-card"><div class="stat-header">Total Submissions</div><div class="stat-value" id="stat-sub-count">0</div></div>
+              <div class="stat-card"><div class="stat-header">Media Uploads</div><div class="stat-value" id="stat-media-count" style="color: var(--primary);">0</div></div>
+            </div>
+            <div class="bento-grid" style="margin-top: 24px;">
+              <div class="bento-card" style="grid-column: 1 / -1;">
+                <h3 class="title-h2">Submission Activity</h3>
+                <p class="text-muted">Requires Premium Tier for live chart data.</p>
+                <div class="chart-container">
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 20%;"></div><span class="chart-label">Mon</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 45%;"></div><span class="chart-label">Tue</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 80%;"></div><span class="chart-label">Wed</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 60%;"></div><span class="chart-label">Thu</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 95%; background: var(--primary);"></div><span class="chart-label" style="color:var(--primary);">Fri</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 30%;"></div><span class="chart-label">Sat</span></div>
+                  <div class="chart-bar-wrap"><div class="chart-bar" style="height: 15%;"></div><span class="chart-label">Sun</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: SDK -->
+          <div id="tab-sdk" class="tab-content">
+            <div class="bento-card" style="margin-bottom: 24px;">
+              <h3 class="title-h2">1. Your Direct API Endpoint</h3>
+              <p class="text-muted" style="margin-bottom: 16px;">Send POST requests securely to this REST endpoint to save data directly to your database.</p>
+              <div style="display:flex; gap:12px; align-items:center; background: var(--bg-main); padding: 8px; border-radius: 12px; border: 1px solid var(--border-color); flex-wrap: wrap;">
+                 <input type="text" readonly id="ui-api-url" class="input" style="flex-grow:1; border:none; font-family:monospace; font-weight:600; color: var(--primary); padding: 8px 12px; margin:0; box-shadow:none; background:transparent;" />
+                 <button class="btn btn-black" onclick="copyApiUrl()" style="flex-shrink:0; width: 100%;">Copy Link</button>
+              </div>
+            </div>
+
+            <div class="bento-card">
+              <h3 class="title-h2">2. Universal Integration Script</h3>
+              <p class="text-muted">Place this script in your HTML. It automatically captures text forms, converts file uploads to Base64 (saving them to your DB), and can trigger Web3Forms emails.</p>
+              <div class="code-box" style="margin-top: 16px; position:relative;">
+                <button onclick="copySdkCode()" style="position:absolute; top:12px; right:12px; background:var(--bg-main); border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-main);">Copy Script</button>
+                <div id="ui-sdk-code" style="white-space: pre-wrap;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: SETTINGS -->
+          <div id="tab-settings" class="tab-content">
+            <div class="bento-card" style="max-width: 600px; margin-bottom: 24px;">
+              <h3 class="title-h2">Email Notifications</h3>
+              <p class="text-muted" style="margin-bottom: 16px;">Receive an email every time this endpoint captures data.</p>
+              
+              <label class="toggle-wrapper" style="margin-bottom: 0;" onclick="toggleEmailSetup(event)">
+                <div><div style="font-weight: 700; font-size: 14px;">Enable Web3Forms Routing</div></div>
+                <input type="checkbox" class="toggle-checkbox" id="settings-email-toggle">
+                <div class="toggle-switch"></div>
+              </label>
+
+              <div id="settings-web3-box" style="display:none; background:var(--bg-main); padding:16px; border-radius:12px; border:1px solid var(--border-color); margin-top:16px;">
+                <p style="font-size:13px; color:var(--text-main); margin-bottom:12px; line-height:1.5;">
+                  Get a free Access Key from <a href="https://web3forms.com" target="_blank" style="color:var(--primary); font-weight:700; text-decoration: none;">Web3Forms.com</a> to enable email delivery.
+                </p>
+                <input type="text" id="settings-web3-key" class="input" placeholder="Paste Web3Forms Access Key here..." style="font-family:monospace; margin-bottom: 12px;" />
+              </div>
+              <button class="btn btn-black" style="width:fit-content; margin-top: 16px;" id="btn-save-settings" onclick="saveFormSettings()">Save Configuration</button>
+            </div>
+
+            <div class="bento-card" style="max-width: 600px; border-color: var(--danger-border);">
+              <h3 class="title-h2" style="color: var(--danger);">Danger Zone</h3>
+              <p class="text-muted">Deleting this endpoint will permanently wipe all collected data associated with it. This action cannot be reversed.</p>
+              <button class="btn btn-danger" style="width: fit-content; margin-top: 16px;" onclick="deleteActiveForm()">Delete Endpoint</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      
+    </main>
+  </div>
+
+  <!-- === MODALS === -->
+  
+  <!-- New Project Modal -->
+  <div id="modal-new-project" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="title-h2" style="margin:0;">Create Project</h3>
+        <button class="btn-icon" onclick="closeModal('modal-new-project')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin:0;">
+          <label class="label">Project Name</label>
+          <input type="text" class="input" placeholder="e.g., Client Website" id="input-new-proj">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-white" onclick="closeModal('modal-new-project')">Cancel</button>
+        <button class="btn btn-primary" onclick="handleCreateProject()" id="btn-create-proj">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Endpoint Modal -->
+  <div id="modal-new-form" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="title-h2" style="margin:0;">Create Endpoint</h3>
+        <button class="btn-icon" onclick="closeModal('modal-new-form')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="label">Endpoint Name</label>
+          <input type="text" class="input" placeholder="e.g., Contact Us Form" id="input-new-form-name">
+        </div>
+        <div class="form-group">
+          <label class="label">Endpoint Type</label>
+          <select class="input" id="input-new-form-type">
+            <option value="form">Standard Web Form</option>
+            <option value="tracker">Headless Activity Tracker</option>
+          </select>
+        </div>
+
+        <label class="toggle-wrapper" style="margin-bottom: 0;" onclick="toggleNewFormEmail(event)">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="font-weight: 700; font-size: 13px;">Enable Email Alerts</div>
+          </div>
+          <input type="checkbox" class="toggle-checkbox" id="new-form-email-toggle">
+          <div class="toggle-switch"></div>
+        </label>
+
+        <div id="new-form-web3-box" style="display:none; background:var(--bg-main); padding:16px; border-radius:12px; border:1px solid var(--border-color); margin-top:16px;">
+          <div style="font-size: 13px; color: var(--text-main); margin-bottom: 12px; line-height: 1.5;">
+            1. Go to <a href="https://web3forms.com" target="_blank" style="color:var(--primary); font-weight:700; text-decoration:none;">Web3Forms.com</a><br/>
+            2. Paste your Free API Key below.
+          </div>
+          <input type="text" class="input" placeholder="Paste Access Key..." id="input-new-form-web3" style="font-family: monospace; font-size: 13px;">
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-white" onclick="closeModal('modal-new-form')">Cancel</button>
+        <button class="btn btn-primary" onclick="handleCreateForm()" id="btn-create-form">Create Endpoint</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- === JAVASCRIPT LOGIC === -->
+  <script>
+    // --- FIREBASE CONFIG (Required for Native JS) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyD7T3i70I-LMCOXlb-7fyjTBi1EAJED7lw",
+      authDomain: "safarxin2026.firebaseapp.com",
+      projectId: "safarxin2026",
+      storageBucket: "safarxin2026.firebasestorage.app",
+      messagingSenderId: "1098859730310",
+      appId: "1:1098859730310:web:101a28da4dcce69bf84807",
+      measurementId: "G-2BY1BZY0QS"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const auth = firebase.auth();
+    const APP_ID = 'flowform-saas';
+
+    // --- STATE ---
+    let currentUser = null;
+    let projectsData = [];
+    let formsData = [];
+    let submissionsData = [];
+    
+    let activeProjectId = null;
+    let activeFormId = null;
+
+    let unsubProjects = null;
+    let unsubForms = null;
+    let unsubSubs = null;
+
+    // --- AUTH LISTENER ---
+    auth.onAuthStateChanged(user => {
+      currentUser = user;
+      if (user) {
+        document.getElementById('ui-user-email').textContent = user.email;
+        switchRootView('view-workspace');
+        openWorkspaceView('ws-dashboard');
+        listenToProjects();
+      } else {
+        if(unsubProjects) unsubProjects();
+        if(unsubForms) unsubForms();
+        if(unsubSubs) unsubSubs();
+        switchRootView('view-landing');
+      }
+    });
+
+    function doLogin() {
+      const btn = document.getElementById('btn-google-login');
+      btn.innerHTML = "Authenticating...";
+      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(err => {
+        alert("Login Error: " + err.message);
+        btn.innerHTML = "Continue with Google";
+      });
+    }
+
+    function doLogout() {
+      auth.signOut();
+    }
+
+    // --- FIREBASE LISTENERS ---
+    function listenToProjects() {
+      if(unsubProjects) unsubProjects();
+      unsubProjects = db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects')
+        .onSnapshot(snap => {
+          projectsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
+          document.getElementById('stat-proj-count').textContent = projectsData.length;
+          renderProjects();
+        }, err => console.error(err));
+    }
+
+    function listenToForms() {
+      if(!activeProjectId) return;
+      if(unsubForms) unsubForms();
+      unsubForms = db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').doc(activeProjectId).collection('forms')
+        .onSnapshot(snap => {
+          formsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
+          document.getElementById('stat-form-count').textContent = formsData.length;
+          renderForms();
+          
+          // If viewing a specific form, update its settings UI
+          if(activeFormId) {
+            const f = formsData.find(x => x.id === activeFormId);
+            if(f) {
+              document.getElementById('settings-email-toggle').checked = !!f.web3Key;
+              document.getElementById('settings-web3-box').style.display = f.web3Key ? 'block' : 'none';
+              document.getElementById('settings-web3-key').value = f.web3Key || '';
+            }
+          }
+        });
+    }
+
+    function listenToSubmissions() {
+      if(!activeProjectId || !activeFormId) return;
+      if(unsubSubs) unsubSubs();
+      unsubSubs = db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').doc(activeProjectId).collection('forms').doc(activeFormId).collection('submissions')
+        .onSnapshot(snap => {
+          submissionsData = snap.docs.map(doc => ({id: doc.id, ...doc.data()})).sort((a,b) => b.createdAt - a.createdAt);
+          document.getElementById('stat-sub-count').textContent = submissionsData.length;
+          
+          // Count media
+          const mediaCount = submissionsData.filter(s => JSON.stringify(s.data).includes('data:image') || JSON.stringify(s.data).includes('data:video')).length;
+          document.getElementById('stat-media-count').textContent = mediaCount;
+          
+          renderSubmissions();
+        });
+    }
+
+    // --- CRUD OPERATIONS ---
+    async function handleCreateProject() {
+      const name = document.getElementById('input-new-proj').value;
+      if(!name) return;
+      document.getElementById('btn-create-proj').innerText = "Creating...";
+      await db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').add({ name, createdAt: Date.now() });
+      document.getElementById('btn-create-proj').innerText = "Create Project";
+      closeModal('modal-new-project');
+      document.getElementById('input-new-proj').value = '';
+    }
+
+    async function handleCreateForm() {
+      const name = document.getElementById('input-new-form-name').value || 'New Endpoint';
+      const type = document.getElementById('input-new-form-type').value;
+      const toggle = document.getElementById('new-form-email-toggle').checked;
+      const web3Key = document.getElementById('input-new-form-web3').value;
+      
+      document.getElementById('btn-create-form').innerText = "Creating...";
+      await db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').doc(activeProjectId).collection('forms').add({
+        name, type, web3Key: toggle ? web3Key : '', createdAt: Date.now()
+      });
+      document.getElementById('btn-create-form').innerText = "Create Endpoint";
+      closeModal('modal-new-form');
+      document.getElementById('input-new-form-name').value = '';
+    }
+
+    async function saveFormSettings() {
+      const toggle = document.getElementById('settings-email-toggle').checked;
+      const web3Key = document.getElementById('settings-web3-key').value;
+      const btn = document.getElementById('btn-save-settings');
+      btn.innerText = "Saving...";
+      
+      await db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').doc(activeProjectId).collection('forms').doc(activeFormId).update({
+        web3Key: toggle ? web3Key : ''
+      });
+      btn.innerText = "Save Configuration";
+      alert("Settings updated!");
+    }
+
+    async function deleteActiveForm() {
+      if(!window.confirm("Permanently delete this endpoint and all records?")) return;
+      await db.collection('artifacts').doc(APP_ID).collection('users').doc(currentUser.uid).collection('projects').doc(activeProjectId).collection('forms').doc(activeFormId).delete();
+      openWorkspaceView('ws-project');
+    }
+
+    // --- RENDERING ---
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>'"]/g, tag => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[tag]));
+    }
+
+    function renderProjects() {
+      const grid = document.getElementById('projects-grid');
+      if (projectsData.length === 0) {
+        grid.innerHTML = '<div class="bento-card" style="grid-column:1/-1;text-align:center;padding:60px 20px;"><p class="text-muted">No projects yet. Create one to begin.</p></div>';
+        return;
+      }
+      grid.innerHTML = projectsData.map(p => `
+        <div class="bento-card clickable" onclick="selectProject('${p.id}', '${escapeHTML(p.name)}')">
+          <div class="bento-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></div>
+          <div><h3 class="title-h2" style="margin-bottom:4px;">${escapeHTML(p.name)}</h3><p class="text-muted" style="font-family:monospace;font-size:12px;">ID: ${p.id}</p></div>
+        </div>
+      `).join('');
+    }
+
+    function selectProject(pid, pname) {
+      activeProjectId = pid;
+      document.getElementById('ui-proj-title').textContent = pname;
+      openWorkspaceView('ws-project');
+      listenToForms();
+    }
+
+    function renderForms() {
+      const tbody = document.getElementById('forms-table-body');
+      if (formsData.length === 0) {
+        tbody.innerHTML = '<tr><td colSpan="3" style="text-align:center; padding:40px;" class="text-muted">No endpoints found. Create one.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = formsData.map(f => `
+        <tr class="clickable-row" onclick="selectForm('${f.id}')">
+          <td><div style="font-weight:700;font-size:15px;margin-bottom:4px;">${escapeHTML(f.name)}</div><div class="text-muted" style="font-family:monospace;font-size:12px;">ID: ${f.id}</div></td>
+          <td><span class="badge" style="${f.type==='tracker' ? 'background:var(--primary-light);color:var(--primary);border-color:var(--danger-border);' : ''}">${f.type==='form' ? 'Web Form' : 'Tracker'}</span></td>
+          <td>${new Date(f.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `).join('');
+    }
+
+    function selectForm(fid) {
+      activeFormId = fid;
+      const f = formsData.find(x => x.id === fid);
+      document.getElementById('ui-form-title').textContent = f.name;
+      document.getElementById('ui-form-type-badge').textContent = f.type === 'form' ? 'Web Form' : 'Tracker';
+      
+      // Build SDK Snippet
+      const url = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/artifacts/${APP_ID}/users/${currentUser.uid}/projects/${activeProjectId}/forms/${activeFormId}/submissions`;
+      document.getElementById('ui-api-url').value = url;
+      
+      const snippet = `<!-- Universal Integration Code -->\n<script>\n  window.FlowForm = {\n    endpoint: "${url}",\n    submit: async function(payload) {\n      const fields = { createdAt: { integerValue: Date.now().toString() }, data: { mapValue: { fields: {} } } };\n      for (const [k, v] of Object.entries(payload)) fields.data.mapValue.fields[k] = { stringValue: String(v) };\n      await fetch(this.endpoint, { method: 'POST', body: JSON.stringify({ fields }) });\n      ${f.web3Key ? `await fetch('https://api.web3forms.com/submit', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ access_key: "${f.web3Key}", ...payload }) });` : ''}\n    }\n  };\n<\/script>`;
+      
+      document.getElementById('ui-sdk-code').textContent = snippet;
+      
+      openWorkspaceView('ws-form');
+      listenToSubmissions();
+    }
+
+    function renderSubmissions() {
+      const container = document.getElementById('submissions-list');
+      const filter = document.getElementById('search-input').value.toLowerCase();
+      
+      const filtered = submissionsData.filter(s => JSON.stringify(s.data).toLowerCase().includes(filter));
+      
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="bento-card" style="text-align:center; padding:60px 20px;"><p class="text-muted">No records found.</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(sub => {
+        const keys = Object.keys(sub.data);
+        const nameKey = keys.find(k => k.toLowerCase().includes('name'));
+        const emailKey = keys.find(k => k.toLowerCase().includes('email'));
+        const title = nameKey ? escapeHTML(sub.data[nameKey]) : (emailKey ? escapeHTML(sub.data[emailKey]) : 'Data Payload');
+        const subtitle = emailKey && nameKey ? escapeHTML(sub.data[emailKey]) : 'System Captured';
+
+        let fieldsHTML = '';
+        for(const [k,v] of Object.entries(sub.data)) {
+          if(k===nameKey || k===emailKey) continue;
+          let mediaHTML = `<div class="data-field-value">${escapeHTML(v)}</div>`;
+          if(String(v).startsWith('data:image/')) mediaHTML = `<img src="${v}" class="media-preview">`;
+          else if(String(v).startsWith('data:audio/')) mediaHTML = `<audio controls class="media-audio"><source src="${v}"></audio>`;
+          
+          fieldsHTML += `<div class="data-field" style="${String(v).startsWith('data:') ? 'grid-column:1/-1;' : ''}"><div class="data-field-label">${escapeHTML(k)}</div>${mediaHTML}</div>`;
+        }
+
+        return `
+          <div class="data-card">
+            <div class="data-header">
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <div class="data-important-title">${title}</div>
+                <div class="data-important-subtitle">${subtitle}</div>
+              </div>
+              <div class="data-timestamp">${new Date(sub.createdAt).toLocaleString()}</div>
+            </div>
+            <div class="data-body">${fieldsHTML}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- UI NAVIGATION & LOGIC ---
+    function switchRootView(viewId) {
+      document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+    }
+
+    function openWorkspaceView(viewId) {
+      document.querySelectorAll('.workspace-view').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+    }
+
+    function switchFormTab(tabId, btn) {
+      document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+    // Modal Toggles
+    function toggleNewFormEmail(e) {
+      e.preventDefault();
+      const cb = document.getElementById('new-form-email-toggle');
+      cb.checked = !cb.checked;
+      document.getElementById('new-form-web3-box').style.display = cb.checked ? 'block' : 'none';
+    }
+    
+    function toggleEmailSetup(e) {
+      e.preventDefault();
+      const cb = document.getElementById('settings-email-toggle');
+      cb.checked = !cb.checked;
+      document.getElementById('settings-web3-box').style.display = cb.checked ? 'block' : 'none';
+    }
+
+    // Copy Handlers
+    function copyApiUrl() {
+      const copyText = document.getElementById("ui-api-url");
+      copyText.select(); document.execCommand("copy"); alert("API URL copied!");
+    }
+    function copySdkCode() {
+      const code = document.getElementById('ui-sdk-code').textContent;
+      navigator.clipboard.writeText(code); alert("Script Copied!");
+    }
+
+  </script>
+</body>
+</html>
