@@ -120,8 +120,6 @@
     .data-field { background: var(--bg-main); padding: 16px; border-radius: 12px; border: 1px solid var(--border-color); width: 100%; overflow: hidden; }
     .data-field-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
     .data-field-value { font-size: 14px; color: var(--text-main); word-break: break-word; white-space: pre-wrap; line-height: 1.5; overflow-wrap: break-word; }
-    .media-preview { max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; background: var(--bg-main); display: block; margin-top: 8px;}
-    .media-audio { width: 100%; max-width: 100%; height: 40px; display: block; margin-top: 8px;}
 
     /* Tabs */
     .tabs { display: flex; gap: 32px; overflow-x: auto; margin-top: 16px; border-bottom: 1px solid var(--border-color); scrollbar-width: none; width: 100%; max-width: 100vw; -webkit-overflow-scrolling: touch;}
@@ -714,7 +712,7 @@
 
       const web3Fetch = f.web3Key ? `\n        // Email Notification\n        await fetch('https://api.web3forms.com/submit', { \n          method: 'POST', \n          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, \n          body: JSON.stringify({ access_key: "${f.web3Key}", subject: "New FlowForm Submission", ...payload }) \n        });` : '';
 
-      // MODIFIED: SDK now sends completely flat unstructured data without nesting inside "data: {}"
+      // SDK dynamically captures all fields flatly
       const snippet = `<!-- Complete Integration Example -->
 <form id="my-flow-form">
   <input type="email" name="email" placeholder="Your Email" required>
@@ -749,7 +747,7 @@
           } else { payload[key] = value; }
         }
 
-        // We push fields absolutely flat to root
+        // Send flat payload
         const fields = { 
           createdAt: { integerValue: Date.now().toString() }, 
           userAgent: { stringValue: navigator.userAgent }
@@ -794,10 +792,10 @@
       listenToSubmissions();
     }
 
-    // --- BULLETPROOF FLAT DATA RENDERER ---
+    // --- BULLETPROOF FLAT DATA RENDERER & STRUCTURING ---
     function renderSubmissions() {
       const container = document.getElementById('submissions-list');
-      if(!container) return; // Safety check
+      if(!container) return; 
       
       const searchFilter = (document.getElementById('search-input')?.value || '').toLowerCase();
       const startDateVal = document.getElementById('filter-start-date')?.value;
@@ -805,11 +803,10 @@
       const typeVal = document.getElementById('filter-type')?.value || 'all';
 
       const startDate = startDateVal ? new Date(startDateVal).getTime() : 0;
-      const endDate = endDateVal ? new Date(endDateVal).getTime() + 86399999 : Infinity; // end of day
+      const endDate = endDateVal ? new Date(endDateVal).getTime() + 86399999 : Infinity; 
 
       const filtered = submissionsData.filter(s => {
-        // Extract flat payload excluding system metadata for searching
-        const payloadObj = { ...(s.data || {}) }; // backward compatibility with older data wrapper
+        const payloadObj = { ...(s.data || {}) }; 
         const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
         for (const key in s) {
           if (!systemKeys.includes(key)) {
@@ -822,7 +819,6 @@
         
         const matchesSearch = strData.includes(searchFilter);
         
-        // Robust Date Check (Handles string or number formats from DB)
         const subTime = Number(s.createdAt) || 0;
         const matchesDate = subTime >= startDate && subTime <= endDate;
         
@@ -838,8 +834,8 @@
       }
 
       container.innerHTML = filtered.map(sub => {
-        // Extract flat payload for display
-        const payloadObj = { ...(sub.data || {}) }; // backward compatibility
+        // Build flat payload cleanly
+        const payloadObj = { ...(sub.data || {}) }; 
         const systemKeys = ['id', 'formId', 'createdAt', 'userAgent', 'read', 'data'];
         for (const key in sub) {
           if (!systemKeys.includes(key)) {
@@ -848,25 +844,57 @@
         }
         
         const keys = Object.keys(payloadObj);
-        const nameKey = keys.find(k => k.toLowerCase().includes('name'));
-        const emailKey = keys.find(k => k.toLowerCase().includes('email'));
+        const nameKey = keys.find(k => k.toLowerCase().includes('name') && typeof payloadObj[k] === 'string' && payloadObj[k].length < 50);
+        const emailKey = keys.find(k => k.toLowerCase().includes('email') && typeof payloadObj[k] === 'string' && payloadObj[k].length < 50);
         
         const title = nameKey ? escapeHTML(payloadObj[nameKey]) : (emailKey ? escapeHTML(payloadObj[emailKey]) : 'Data Payload');
         const subtitle = emailKey && nameKey ? escapeHTML(payloadObj[emailKey]) : 'System Captured';
 
-        let fieldsHTML = '';
+        let textFields = [];
+        let longTextFields = [];
+        let mediaFields = [];
+
+        // Structure the data layout based on type and length
         for(const [k,v] of Object.entries(payloadObj)) {
           if(k===nameKey || k===emailKey) continue;
           
-          let mediaHTML = `<div class="data-field-value">${escapeHTML(v)}</div>`;
-          if(String(v).startsWith('data:image/')) mediaHTML = `<img src="${v}" class="media-preview">`;
-          else if(String(v).startsWith('data:audio/')) mediaHTML = `<audio controls class="media-audio"><source src="${v}"></audio>`;
-          else if(String(v).startsWith('data:video/')) mediaHTML = `<video controls class="media-preview"><source src="${v}"></video>`;
+          // Format Key: "user_message" -> "User Message"
+          const cleanKey = k.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
           
-          fieldsHTML += `<div class="data-field" style="${String(v).startsWith('data:') ? 'grid-column:1/-1;' : ''}"><div class="data-field-label">${escapeHTML(k)}</div>${mediaHTML}</div>`;
+          if (typeof v === 'object' && v !== null) {
+            longTextFields.push(`<div class="data-field" style="grid-column: 1 / -1"><div class="data-field-label">${escapeHTML(cleanKey)}</div><pre style="font-size:12px; white-space:pre-wrap; margin:0; background:var(--bg-alt); padding:12px; border-radius:8px; border:1px solid var(--border-color); overflow-x:auto; color:var(--text-main);">${escapeHTML(JSON.stringify(v, null, 2))}</pre></div>`);
+          } else {
+            const strV = String(v);
+            const safeStrV = escapeHTML(strV);
+            
+            // Analyze file types and bind directly to HTML players
+            if(strV.startsWith('data:image/')) {
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><img src="${safeStrV}" style="max-height: 200px; max-width: 100%; border-radius: 6px; object-fit: contain; background: var(--bg-main); border: 1px solid var(--border-color);"></div>`);
+            } else if(strV.startsWith('data:audio/')) {
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><audio controls style="width: 100%; height: 40px;" src="${safeStrV}"></audio></div>`);
+            } else if(strV.startsWith('data:video/')) {
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 250px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><video controls style="max-height: 250px; max-width: 100%; border-radius: 6px; border: 1px solid var(--border-color); background: #000;" src="${safeStrV}"></video></div>`);
+            } else if(strV.startsWith('data:')) {
+               // Fallback button for unrecognized base64 documents (PDF, Docx, etc)
+              mediaFields.push(`<div style="border: 1px solid var(--border-color); padding: 12px; border-radius: 12px; background: var(--bg-alt); display:flex; flex-direction:column; gap:8px; min-width: 200px; flex: 1;"><div class="data-field-label" style="margin:0;">${escapeHTML(cleanKey)}</div><a href="${safeStrV}" download="${escapeHTML(cleanKey)}_attachment" class="btn btn-white" style="font-size:12px; padding:8px 12px; text-decoration:none; text-align:center;">Download Document</a></div>`);
+            } else if(strV.length > 60 || strV.includes('\n')) {
+              longTextFields.push(`<div class="data-field" style="grid-column: 1 / -1"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value" style="background:var(--bg-alt); padding:12px; border-radius:8px; border:1px solid var(--border-color);">${safeStrV}</div></div>`);
+            } else {
+              textFields.push(`<div class="data-field"><div class="data-field-label">${escapeHTML(cleanKey)}</div><div class="data-field-value">${safeStrV}</div></div>`);
+            }
+          }
         }
 
-        // Robust time formatting
+        let fieldsHTML = textFields.join('') + longTextFields.join('');
+        
+        // Add dedicated media attachments section
+        if (mediaFields.length > 0) {
+          fieldsHTML += `<div style="grid-column: 1 / -1; margin-top: 8px; padding-top: 16px; border-top: 1px dashed var(--border-color);"><div class="data-field-label" style="margin-bottom: 12px; color: var(--text-main);">Attached Media & Files</div><div style="display:flex; gap:16px; flex-wrap:wrap; width:100%;">${mediaFields.join('')}</div></div>`;
+        }
+        if (fieldsHTML === '') {
+            fieldsHTML = `<div class="data-field" style="grid-column: 1 / -1; text-align:center; color: var(--text-muted); padding: 20px;">Empty Payload</div>`;
+        }
+
         const timeStr = sub.createdAt ? new Date(Number(sub.createdAt)).toLocaleString() : 'Unknown Date';
 
         return `
